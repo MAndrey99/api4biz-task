@@ -4,7 +4,7 @@ WORKDIR /usr/src/app
 
 COPY requirements.txt .
 COPY main.py .
-COPY server .
+COPY ./server ./server
 
 RUN pip install --no-cache-dir -r requirements.txt
 

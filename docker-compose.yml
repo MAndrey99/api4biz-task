@@ -9,4 +9,4 @@ services:
     ports:
       - $PORT:8080
     environment:
-      IS_CONTAINER: True
+      IS_CONTAINER: 1
