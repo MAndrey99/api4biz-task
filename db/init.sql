@@ -10,6 +10,6 @@ CREATE TABLE staff (
 );
 
 CREATE TABLE products (
-  employee_id  integer references staff(id),  -- ответственный сотрудник
-  name         text not null unique           -- название товара
+  employee_id  integer,              -- ответственный сотрудник
+  name         text not null unique  -- название товара
 );
