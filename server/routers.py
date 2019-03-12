@@ -1,5 +1,5 @@
 from io import StringIO
-from aiohttp.web import RouteTableDef, Request, Response
+from aiohttp.web import RouteTableDef, Request, Response, FileResponse
 from .database import get_db, asyncpg
 import logging
 
@@ -9,6 +9,12 @@ routers = RouteTableDef()
 
 @routers.get('/company/add')
 async def company_add_handler(request: Request):
+    """
+    Добавляет компанию
+    Обязательные параметры:
+    - name - название компании
+    """
+
     name = request.query.get("name")
 
     if name is None:
@@ -23,6 +29,9 @@ async def company_add_handler(request: Request):
 
 @routers.get('/company/list')
 async def company_list_handler(request: Request):
+    """
+    Возвращает список всех компаний
+    """
     res = StringIO()
 
     for i in await db.fetch("SELECT name FROM companies"):
@@ -33,6 +42,12 @@ async def company_list_handler(request: Request):
 
 @routers.get('/staff/add')
 async def staff_add_handler(request: Request):
+    """
+    Добавляет работника
+    Обязательные параметры:
+    - name     - имя работника
+    - company  - название компании(Компания должна уже существовать)
+    """
     name = request.query.get("name")
     company = request.query.get("company")
 
@@ -50,18 +65,23 @@ async def staff_add_handler(request: Request):
 
 @routers.get('/staff/list')
 async def staff_list_handler(request: Request):
+    """
+    Возвращает список персонала
+    """
     res = StringIO()
 
-    for i in await db.fetch("SELECT name, company_name FROM staff"):
-        res.write(f"{i.get('name')} из {i.get('company_name')}\n")
+    for i in await db.fetch("SELECT * FROM staff"):
+        res.write(f"id {i.get('id')}: {i.get('name')} из {i.get('company_name')}\n")
 
     return Response(text=res.getvalue())
 
 
 @routers.get('/')
 async def index_handler(request: Request):
-    # TODO: print manual
-    return Response(text="Hello!")
+    """
+    Возвращает информацию о всех методах api
+    """
+    return FileResponse("./static/index.html")
 
 
 async def init(app):
