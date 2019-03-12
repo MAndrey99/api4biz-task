@@ -104,9 +104,9 @@ async def products_add_handler(request: Request):
 
         try:
             # добавляем продукт
-            await db.execute(f"INSERT INTO products (name, employee_id) VALUES ('{name}', {int(employee_id)})")
+            await db.execute(f"INSERT INTO products (name, employee_id) VALUES ('{name}', {employee_id})")
         except asyncpg.UniqueViolationError:
-            return Response(text="пОшибка: родукт с этим названием уже существует!")
+            return Response(text="Ошибка: родукт с этим названием уже существует!")
     else:
         # добавляем продукт без указания отвецственного сотрудника
         await db.execute(f"INSERT INTO products (name) VALUES ('{name}')")
@@ -122,7 +122,24 @@ async def products_set_employee_handler(request: Request):
     - name         - название продукта
     - employee_id  - id ответственного сотрудника
     """
-    # TODO
+    name = request.query.get("name")
+    employee_id = request.query.get("employee_id")
+
+    if name is None:
+        return Response(text="Ошибка! Параметр name не указан!")
+    if employee_id is None:
+        return Response(text="Ошибка! Параметр employee_id не указан!")
+
+    # проверяем, что сотрудник с указанным id существует
+    tmp = await db.fetch(f"SELECT count(*) FROM staff WHERE id={employee_id}")
+
+    if tmp[0].get("count") == 0:
+        return Response(text="Ошибка: сотрудника с указанным id не существует!")
+
+    # Обновляем запись
+    await db.execute(f"UPDATE products SET employee_id={employee_id} WHERE name='{name}'")
+
+    return Response(text="Удачно!")
 
 
 @routers.get('/products/list')
