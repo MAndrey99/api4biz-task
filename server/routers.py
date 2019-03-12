@@ -3,7 +3,7 @@ from aiohttp.web import RouteTableDef, Request, Response, FileResponse
 from .database import get_db, asyncpg
 import logging
 
-db: asyncpg.Connection
+db_pool: asyncpg.pool.Pool
 routers = RouteTableDef()
 
 
@@ -22,7 +22,8 @@ async def company_add_handler(request: Request):
         return Response(text="Ошибка! Параметр name не указан!")
 
     try:
-        await db.execute(f"INSERT INTO companies (name) VALUES ('{name}')")
+        async with db_pool.acquire() as conn:
+            await conn.execute(f"INSERT INTO companies (name) VALUES ('{name}')")
         return Response(text="Удачно!")
     except asyncpg.UniqueViolationError:
         return Response(text="Эта компания уже существует!")
@@ -33,12 +34,10 @@ async def company_list_handler(request: Request):
     """
     Возвращает список всех компаний
     """
-    res = StringIO()
+    async with db_pool.acquire() as conn:
+        companies = await conn.fetch("SELECT name FROM companies")
 
-    for i in await db.fetch("SELECT name FROM companies"):
-        res.write(f"{i.get('name')}\n")
-
-    return Response(text=res.getvalue())
+    return Response(text='\n'.join((i.get('name') for i in companies)))
 
 
 @routers.get('/staff/add')
@@ -59,7 +58,8 @@ async def staff_add_handler(request: Request):
         return Response(text="Ошибка! Параметр company не указан!")
 
     try:
-        await db.execute(f"INSERT INTO staff (name, company_name) VALUES ('{name}', '{company}')")
+        async with db_pool.acquire() as conn:
+            await conn.execute(f"INSERT INTO staff (name, company_name) VALUES ('{name}', '{company}')")
         return Response(text="Удачно!")
     except asyncpg.ForeignKeyViolationError:
         return Response(text="Указаная компания не существует!")
@@ -70,12 +70,10 @@ async def staff_list_handler(request: Request):
     """
     Возвращает список персонала
     """
-    res = StringIO()
+    async with db_pool.acquire() as conn:
+        companies = await conn.fetch("SELECT * FROM staff")
 
-    for i in await db.fetch("SELECT * FROM staff"):
-        res.write(f"id {i.get('id')}: {i.get('name')} из {i.get('company_name')}\n")
-
-    return Response(text=res.getvalue())
+    return Response(text='\n'.join((f"id {i.get('id')}: {i.get('name')} из {i.get('company_name')}" for i in companies)))
 
 
 @routers.get('/products/add')
@@ -95,21 +93,23 @@ async def products_add_handler(request: Request):
     if name is None:
         return Response(text="Ошибка! Параметр name не указан!")
 
-    if employee_id:
-        # проверяем, что сотрудник с указанным id существует
-        tmp = await db.fetch(f"SELECT count(*) FROM staff WHERE id={employee_id}")
+    async with db_pool.acquire() as conn:
+        if employee_id:
+            # проверяем, что сотрудник с указанным id существует
+            tmp = await conn.fetch(f"SELECT count(*) FROM staff WHERE id={employee_id}")
 
-        if tmp[0].get("count") == 0:
-            return Response(text="Ошибка: сотрудника с указанным id не существует!")
+            if tmp[0].get("count") == 0:
+                return Response(text="Ошибка: сотрудника с указанным id не существует!")
 
-        try:
-            # добавляем продукт
-            await db.execute(f"INSERT INTO products (name, employee_id) VALUES ('{name}', {employee_id})")
-        except asyncpg.UniqueViolationError:
-            return Response(text="Ошибка: родукт с этим названием уже существует!")
-    else:
-        # добавляем продукт без указания отвецственного сотрудника
-        await db.execute(f"INSERT INTO products (name) VALUES ('{name}')")
+            try:
+                # добавляем продукт
+                await conn.execute(f"INSERT INTO products (name, employee_id) VALUES ('{name}', {employee_id})")
+            except asyncpg.UniqueViolationError:
+                return Response(text="Ошибка: родукт с этим названием уже существует!")
+        else:
+            # добавляем продукт без указания отвецственного сотрудника
+            async with db_pool.acquire() as conn:
+                await conn.execute(f"INSERT INTO products (name) VALUES ('{name}')")
     return Response(text="Удачно!")
 
 
@@ -131,13 +131,14 @@ async def products_set_employee_handler(request: Request):
         return Response(text="Ошибка! Параметр employee_id не указан!")
 
     # проверяем, что сотрудник с указанным id существует
-    tmp = await db.fetch(f"SELECT count(*) FROM staff WHERE id={employee_id}")
+    async with db_pool.acquire() as conn:
+        tmp = await conn.fetch(f"SELECT count(*) FROM staff WHERE id={employee_id}")
 
-    if tmp[0].get("count") == 0:
-        return Response(text="Ошибка: сотрудника с указанным id не существует!")
+        if tmp[0].get("count") == 0:
+            return Response(text="Ошибка: сотрудника с указанным id не существует!")
 
-    # Обновляем запись
-    await db.execute(f"UPDATE products SET employee_id={employee_id} WHERE name='{name}'")
+        # Обновляем запись
+        await conn.execute(f"UPDATE products SET employee_id={employee_id} WHERE name='{name}'")
 
     return Response(text="Удачно!")
 
@@ -149,17 +150,18 @@ async def products_list_handler(request: Request):
     """
     res = StringIO()
 
-    for i in await db.fetch("SELECT * FROM products"):
-        res.write(f"{i.get('name')}")
-        if i.get('employee_id'):
-            # Получаем имя отвецственного сотрудника
-            tmp = await db.fetch(f"SELECT name FROM staff WHERE id={i.get('employee_id')}")
-            assert tmp
+    async with db_pool.acquire() as conn:
+        for i in await conn.fetch("SELECT * FROM products"):
+            res.write(f"{i.get('name')}")
+            if i.get('employee_id'):
+                # Получаем имя отвецственного сотрудника
+                tmp = await conn.fetch(f"SELECT name FROM staff WHERE id={i.get('employee_id')}")
+                assert tmp
 
-            # записываем инфу о сотруднике
-            res.write(f" <- {tmp[0].get('name')}(id {i.get('employee_id')})\n")
-        else:
-            res.write('\n')
+                # записываем инфу о сотруднике
+                res.write(f" <- {tmp[0].get('name')}(id {i.get('employee_id')})\n")
+            else:
+                res.write('\n')
 
     return Response(text=res.getvalue())
 
@@ -173,8 +175,8 @@ async def index_handler(request: Request):
 
 
 async def init(app):
-    global db
-    db = get_db()
+    global db_pool
+    db_pool = get_db()
 
     logging.info("Добавляем роутеры")
     app.add_routes(routers)
