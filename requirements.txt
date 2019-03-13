@@ -1,3 +1,5 @@
 aiohttp
 asyncpg
 pytest
+jsonschema
+pytest-asyncio

@@ -1,7 +1,9 @@
-from io import StringIO
 from aiohttp.web import RouteTableDef, Request, Response, FileResponse
-from .database import get_db, asyncpg
+from io import StringIO
+import jsonschema
 import logging
+
+from .database import get_db, asyncpg
 
 db_pool: asyncpg.pool.Pool
 routers = RouteTableDef()
@@ -16,10 +18,26 @@ async def company_add_handler(request: Request):
     - name - название компании
     """
 
-    name = request.query.get("name")
+    schema = {
+        "type": "object",
 
-    if name is None:
-        return Response(text="Ошибка! Параметр name не указан!")
+        "properties": {
+            "name": {
+                "type": "string",
+                "pattern": "^[A-Za-z]{2,}$"
+            },
+        },
+
+        "required": ["name"],
+        "additionalProperties": False,
+    }
+
+    try:
+        jsonschema.validate(dict(request.query), schema)
+    except jsonschema.ValidationError as e:
+        return Response(text=e.message)
+
+    name = request.query.get("name")
 
     try:
         async with db_pool.acquire() as conn:
@@ -49,13 +67,32 @@ async def staff_add_handler(request: Request):
     - name     - имя работника
     - company  - название компании(Компания должна уже существовать)
     """
+
+    schema = {
+        "type": "object",
+
+        "properties": {
+            "name": {
+                "type": "string",
+                "pattern": "^[A-Z][a-z]+$"
+            },
+            "company": {
+                "type": "string",
+                "pattern": "^[A-Za-z]{2,}$"
+            }
+        },
+
+        "additionalProperties": False,
+        "minProperties": 2,
+    }
+
+    try:
+        jsonschema.validate(dict(request.query), schema)
+    except jsonschema.ValidationError as e:
+        return Response(text=e.message)
+
     name = request.query.get("name")
     company = request.query.get("company")
-
-    if name is None:
-        return Response(text="Ошибка! Параметр name не указан!")
-    if company is None:
-        return Response(text="Ошибка! Параметр company не указан!")
 
     try:
         async with db_pool.acquire() as conn:
@@ -87,11 +124,31 @@ async def products_add_handler(request: Request):
     Дополнительные параметры:
     - employee_id  - id ответственного сотрудника
     """
+
+    schema = {
+        "type": "object",
+
+        "properties": {
+            "name": {
+                "type": "string"
+            },
+            "employee_id": {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+            }
+        },
+
+        "required": ["name"],
+        "additionalProperties": False
+    }
+
+    try:
+        jsonschema.validate(dict(request.query), schema)
+    except jsonschema.ValidationError as e:
+        return Response(text=e.message)
+
     name = request.query.get("name")
     employee_id = request.query.get("employee_id")
-
-    if name is None:
-        return Response(text="Ошибка! Параметр name не указан!")
 
     async with db_pool.acquire() as conn:
         if employee_id:
@@ -122,6 +179,29 @@ async def products_set_employee_handler(request: Request):
     - name         - название продукта
     - employee_id  - id ответственного сотрудника
     """
+
+    schema = {
+        "type": "object",
+
+        "properties": {
+            "name": {
+                "type": "string"
+            },
+            "employee_id": {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+            }
+        },
+
+        "required": ["name", "employee_id"],
+        "additionalProperties": False
+    }
+
+    try:
+        jsonschema.validate(dict(request.query), schema)
+    except jsonschema.ValidationError as e:
+        return Response(text=e.message)
+
     name = request.query.get("name")
     employee_id = request.query.get("employee_id")
 
