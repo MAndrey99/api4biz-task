@@ -24,11 +24,11 @@ async def company_add_handler(request: Request):
             "name": {
                 "type": "string",
                 "pattern": "^[A-Za-z]{2,}$"
-            },
+            }
         },
 
         "required": ["name"],
-        "additionalProperties": False,
+        "additionalProperties": False
     }
 
     try:
@@ -84,7 +84,7 @@ async def staff_add_handler(request: Request):
         },
 
         "additionalProperties": False,
-        "minProperties": 2,
+        "minProperties": 2
     }
 
     try:

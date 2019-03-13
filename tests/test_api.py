@@ -19,8 +19,8 @@ def test_company():
             async with session.get('http://0.0.0.0:8080/company/list') as resp:
                 assert resp.status == 200
 
-                for i in (await resp.text()).split():
-                    assert ng.generated(i)
+                for i in (await resp.json())['content']:
+                    assert ng.generated(i['name'])
 
         async with aiohttp.ClientSession() as session:
             tasks = []
