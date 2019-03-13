@@ -13,7 +13,17 @@ async def pg_engine(app):
     logging.info("Подключаемся к базе данных")
 
     if os.getenv("IS_CONTAINER", False):
-        __db = await asyncpg.create_pool(host="db", user="postgres", database="postgres", password="123")
+        from time import sleep
+
+        for _ in range(10):
+            try:
+                __db = await asyncpg.create_pool(host="db", user="postgres", database="postgres", password="123")
+                del sleep
+                break
+            except ConnectionRefusedError:
+                sleep(0.2)
+        else:
+            raise ConnectionError("Нет доступа к базе данных!")
     else:
         __db = await asyncpg.create_pool(host="localhost", user="postgres", database="postgres", password="123")
 
