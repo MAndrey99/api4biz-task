@@ -90,7 +90,7 @@ async def staff_add_handler(request: Request):
     try:
         jsonschema.validate(dict(request.query), schema)
     except jsonschema.ValidationError as e:
-        return json_response({"status": 400, "error": e.message})
+        return json_response({"error": e.message}, status=400)
 
     name = request.query.get("name")
     company = request.query.get("company")

@@ -1,11 +1,11 @@
 import aiohttp
 from random import randint
-from asyncio import get_event_loop, gather
+from asyncio import gather
 
 from .name_generator import NameGenerator
 
 
-def test_company():
+def test_company(loop):
     async def _test():
         ng = NameGenerator()
 
@@ -32,6 +32,32 @@ def test_company():
 
             await gather(*tasks)
 
-    loop = get_event_loop()
     loop.run_until_complete(_test())
-    loop.close()
+
+
+def test_add_on_bad_request(loop):
+    async def _test():
+        async def check(src: str, params: dict):
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f'http://0.0.0.0:8080/{src}/add', params=params) as resp:
+                    assert resp.status == 400
+                    assert (await resp.json())['error']
+
+        tasks = []
+
+        for src in ("company", "staff", "products"):
+            for p in (
+                        {"id": randint(0, 1000)},
+                        {"employee_id": randint(0, 1000)},
+                        {"name": randint(-100, 100), "employee_id": randint(0, 100)},
+                        {"name": randint(-100, 100), "id": randint(0, 100)},
+                        {"name": "Vi", "id": "err", "employee_id": randint(0, 100)},
+                        {"name": "Vi", "id": "err"},
+                        {"name": "Vi", "employee_id": "err"},
+                        dict()
+                    ):
+                tasks.append(loop.create_task(check(src, p)))
+
+        await gather(*tasks)
+
+    loop.run_until_complete(_test())
