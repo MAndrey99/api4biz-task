@@ -1,5 +1,4 @@
-from aiohttp.web import RouteTableDef, Request, Response, FileResponse
-from io import StringIO
+from aiohttp.web import RouteTableDef, Request, json_response, FileResponse
 import jsonschema
 import logging
 
@@ -35,16 +34,16 @@ async def company_add_handler(request: Request):
     try:
         jsonschema.validate(dict(request.query), schema)
     except jsonschema.ValidationError as e:
-        return Response(text=e.message)
+        return json_response({"error": e.message}, status=400)
 
     name = request.query.get("name")
 
     try:
         async with db_pool.acquire() as conn:
             await conn.execute(f"INSERT INTO companies (name) VALUES ('{name}')")
-        return Response(text="Удачно!")
+        return json_response({})
     except asyncpg.UniqueViolationError:
-        return Response(text="Эта компания уже существует!")
+        return json_response({"error": "company already created"}, status=208)
 
 
 @routers.get('/company/list')
@@ -55,7 +54,9 @@ async def company_list_handler(request: Request):
     async with db_pool.acquire() as conn:
         companies = await conn.fetch("SELECT name FROM companies")
 
-    return Response(text='\n'.join((i.get('name') for i in companies)))
+    return json_response({
+        "content": [{"name": i.get('name')} for i in companies]
+    })
 
 
 @routers.get('/staff/add')
@@ -89,7 +90,7 @@ async def staff_add_handler(request: Request):
     try:
         jsonschema.validate(dict(request.query), schema)
     except jsonschema.ValidationError as e:
-        return Response(text=e.message)
+        return json_response({"status": 400, "error": e.message})
 
     name = request.query.get("name")
     company = request.query.get("company")
@@ -97,9 +98,9 @@ async def staff_add_handler(request: Request):
     try:
         async with db_pool.acquire() as conn:
             await conn.execute(f"INSERT INTO staff (name, company_name) VALUES ('{name}', '{company}')")
-        return Response(text="Удачно!")
+        return json_response({})
     except asyncpg.ForeignKeyViolationError:
-        return Response(text="Указаная компания не существует!")
+        return json_response({"error": f"company '{company}' is not exists"}, status=400)
 
 
 @routers.get('/staff/list')
@@ -108,9 +109,17 @@ async def staff_list_handler(request: Request):
     Возвращает список персонала
     """
     async with db_pool.acquire() as conn:
-        companies = await conn.fetch("SELECT * FROM staff")
+        staff = await conn.fetch("SELECT * FROM staff")
 
-    return Response(text='\n'.join((f"id {i.get('id')}: {i.get('name')} из {i.get('company_name')}" for i in companies)))
+    return json_response({
+        "content": [
+            {
+                "id": i.get('id'),
+                "name": i.get('name'),
+                "company": i.get('company_name')
+            } for i in staff
+        ]
+    })
 
 
 @routers.get('/products/add')
@@ -145,7 +154,7 @@ async def products_add_handler(request: Request):
     try:
         jsonschema.validate(dict(request.query), schema)
     except jsonschema.ValidationError as e:
-        return Response(text=e.message)
+        return json_response({"error": e.message}, status=400)
 
     name = request.query.get("name")
     employee_id = request.query.get("employee_id")
@@ -156,18 +165,18 @@ async def products_add_handler(request: Request):
             tmp = await conn.fetch(f"SELECT count(*) FROM staff WHERE id={employee_id}")
 
             if tmp[0].get("count") == 0:
-                return Response(text="Ошибка: сотрудника с указанным id не существует!")
+                return json_response({"error": f"employee with id '{employee_id}' is not exists"}, status=400)
 
             try:
                 # добавляем продукт
                 await conn.execute(f"INSERT INTO products (name, employee_id) VALUES ('{name}', {employee_id})")
             except asyncpg.UniqueViolationError:
-                return Response(text="Ошибка: родукт с этим названием уже существует!")
+                return json_response({"error": f"product '{name}' already exists"}, status=400)
         else:
             # добавляем продукт без указания отвецственного сотрудника
             async with db_pool.acquire() as conn:
                 await conn.execute(f"INSERT INTO products (name) VALUES ('{name}')")
-    return Response(text="Удачно!")
+    return json_response({})
 
 
 @routers.get('/products/set_employee')
@@ -200,27 +209,22 @@ async def products_set_employee_handler(request: Request):
     try:
         jsonschema.validate(dict(request.query), schema)
     except jsonschema.ValidationError as e:
-        return Response(text=e.message)
+        return json_response({"error": e.message}, status=400)
 
     name = request.query.get("name")
     employee_id = request.query.get("employee_id")
-
-    if name is None:
-        return Response(text="Ошибка! Параметр name не указан!")
-    if employee_id is None:
-        return Response(text="Ошибка! Параметр employee_id не указан!")
 
     # проверяем, что сотрудник с указанным id существует
     async with db_pool.acquire() as conn:
         tmp = await conn.fetch(f"SELECT count(*) FROM staff WHERE id={employee_id}")
 
         if tmp[0].get("count") == 0:
-            return Response(text="Ошибка: сотрудника с указанным id не существует!")
+            return json_response({"error": f"employee with id '{employee_id}' is not exists"}, status=400)
 
         # Обновляем запись
         await conn.execute(f"UPDATE products SET employee_id={employee_id} WHERE name='{name}'")
 
-    return Response(text="Удачно!")
+    return json_response({})
 
 
 @routers.get('/products/list')
@@ -228,22 +232,18 @@ async def products_list_handler(request: Request):
     """
     Возвращает список продуктов
     """
-    res = StringIO()
 
     async with db_pool.acquire() as conn:
-        for i in await conn.fetch("SELECT * FROM products"):
-            res.write(f"{i.get('name')}")
-            if i.get('employee_id'):
-                # Получаем имя отвецственного сотрудника
-                tmp = await conn.fetch(f"SELECT name FROM staff WHERE id={i.get('employee_id')}")
-                assert tmp
+        products = await conn.fetch("SELECT * FROM products")
 
-                # записываем инфу о сотруднике
-                res.write(f" <- {tmp[0].get('name')}(id {i.get('employee_id')})\n")
-            else:
-                res.write('\n')
-
-    return Response(text=res.getvalue())
+    return json_response({
+        "content": [
+            {
+                "name": i.get('name'),
+                "employee_id": i.get('employee_id')
+            } for i in products
+        ]
+    })
 
 
 @routers.get('/')
