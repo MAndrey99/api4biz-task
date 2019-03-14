@@ -1,8 +1,9 @@
-from aiohttp.web import RouteTableDef, Request, json_response, FileResponse
+from aiohttp.web import RouteTableDef, Request, FileResponse
 import jsonschema
 import logging
 
 from .database import get_db, asyncpg
+from .resp_validation import validated_json_response
 
 db_pool: asyncpg.pool.Pool
 routers = RouteTableDef()
@@ -34,16 +35,16 @@ async def company_add_handler(request: Request):
     try:
         jsonschema.validate(dict(request.query), schema)
     except jsonschema.ValidationError as e:
-        return json_response({"error": e.message}, status=400)
+        return validated_json_response({"error": e.message}, status=400)
 
     name = request.query.get("name")
 
     try:
         async with db_pool.acquire() as conn:
             await conn.execute(f"INSERT INTO companies (name) VALUES ('{name}')")
-        return json_response({})
+        return validated_json_response({})
     except asyncpg.UniqueViolationError:
-        return json_response({"error": "company already created"}, status=208)
+        return validated_json_response({"error": "company already created"}, status=208)
 
 
 @routers.get('/company/list')
@@ -54,7 +55,7 @@ async def company_list_handler(request: Request):
     async with db_pool.acquire() as conn:
         companies = await conn.fetch("SELECT name FROM companies")
 
-    return json_response({
+    return validated_json_response({
         "content": [{"name": i.get('name')} for i in companies]
     })
 
@@ -90,7 +91,7 @@ async def staff_add_handler(request: Request):
     try:
         jsonschema.validate(dict(request.query), schema)
     except jsonschema.ValidationError as e:
-        return json_response({"error": e.message}, status=400)
+        return validated_json_response({"error": e.message}, status=400)
 
     name = request.query.get("name")
     company = request.query.get("company")
@@ -98,9 +99,9 @@ async def staff_add_handler(request: Request):
     try:
         async with db_pool.acquire() as conn:
             await conn.execute(f"INSERT INTO staff (name, company_name) VALUES ('{name}', '{company}')")
-        return json_response({})
+        return validated_json_response({})
     except asyncpg.ForeignKeyViolationError:
-        return json_response({"error": f"company '{company}' is not exists"}, status=400)
+        return validated_json_response({"error": f"company '{company}' is not exists"}, status=400)
 
 
 @routers.get('/staff/list')
@@ -111,7 +112,7 @@ async def staff_list_handler(request: Request):
     async with db_pool.acquire() as conn:
         staff = await conn.fetch("SELECT * FROM staff")
 
-    return json_response({
+    return validated_json_response({
         "content": [
             {
                 "id": i.get('id'),
@@ -154,7 +155,7 @@ async def products_add_handler(request: Request):
     try:
         jsonschema.validate(dict(request.query), schema)
     except jsonschema.ValidationError as e:
-        return json_response({"error": e.message}, status=400)
+        return validated_json_response({"error": e.message}, status=400)
 
     name = request.query.get("name")
     employee_id = request.query.get("employee_id")
@@ -165,18 +166,21 @@ async def products_add_handler(request: Request):
             tmp = await conn.fetch(f"SELECT count(*) FROM staff WHERE id={employee_id}")
 
             if tmp[0].get("count") == 0:
-                return json_response({"error": f"employee with id '{employee_id}' is not exists"}, status=400)
+                return validated_json_response({"error": f"employee with id '{employee_id}' is not exists"}, status=400)
 
             try:
                 # добавляем продукт
                 await conn.execute(f"INSERT INTO products (name, employee_id) VALUES ('{name}', {employee_id})")
             except asyncpg.UniqueViolationError:
-                return json_response({"error": f"product '{name}' already exists"}, status=400)
+                return validated_json_response({"error": f"product '{name}' already exists"}, status=400)
         else:
             # добавляем продукт без указания отвецственного сотрудника
             async with db_pool.acquire() as conn:
-                await conn.execute(f"INSERT INTO products (name) VALUES ('{name}')")
-    return json_response({})
+                try:
+                    await conn.execute(f"INSERT INTO products (name) VALUES ('{name}')")
+                except asyncpg.UniqueViolationError:
+                    return validated_json_response({"error": f"product '{name}' already exists"}, status=400)
+    return validated_json_response({})
 
 
 @routers.get('/products/set_employee')
@@ -209,22 +213,24 @@ async def products_set_employee_handler(request: Request):
     try:
         jsonschema.validate(dict(request.query), schema)
     except jsonschema.ValidationError as e:
-        return json_response({"error": e.message}, status=400)
+        return validated_json_response({"error": e.message}, status=400)
 
     name = request.query.get("name")
     employee_id = request.query.get("employee_id")
 
-    # проверяем, что сотрудник с указанным id существует
     async with db_pool.acquire() as conn:
-        tmp = await conn.fetch(f"SELECT count(*) FROM staff WHERE id={employee_id}")
+        # проверяем, что сотрудник с указанным id существует
+        if (await conn.fetch(f"SELECT count(*) FROM staff WHERE id={employee_id}"))[0].get("count") == 0:
+            return validated_json_response({"error": f"employee with id '{employee_id}' is not exists"}, status=400)
 
-        if tmp[0].get("count") == 0:
-            return json_response({"error": f"employee with id '{employee_id}' is not exists"}, status=400)
+        # проверяем, что продукт с указанным названием существует
+        if (await conn.fetch(f"SELECT count(*) FROM products WHERE name='{name}'"))[0].get("count") == 0:
+            return validated_json_response({"error": f"product with name '{name}' is not exists"}, status=400)
 
         # Обновляем запись
         await conn.execute(f"UPDATE products SET employee_id={employee_id} WHERE name='{name}'")
 
-    return json_response({})
+    return validated_json_response({})
 
 
 @routers.get('/products/list')
@@ -236,7 +242,7 @@ async def products_list_handler(request: Request):
     async with db_pool.acquire() as conn:
         products = await conn.fetch("SELECT * FROM products")
 
-    return json_response({
+    return validated_json_response({
         "content": [
             {
                 "name": i.get('name'),
