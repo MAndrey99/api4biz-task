@@ -9,6 +9,20 @@ db_pool: asyncpg.pool.Pool
 routers = RouteTableDef()
 
 
+@routers.get('/delete_all')
+async def drop_all_handler(request: Request):
+    """
+    Удаляет все данные
+    """
+
+    async with db_pool.acquire() as conn:
+        await conn.execute("DELETE FROM products")
+        await conn.execute("DELETE FROM staff")
+        await conn.execute("DELETE FROM companies")
+
+    return validated_json_response({})
+
+
 @routers.get('/company/add')
 async def company_add_handler(request: Request):
     """
