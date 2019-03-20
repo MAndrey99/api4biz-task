@@ -49,7 +49,7 @@ async def company_add_handler(request: Request):
     try:
         jsonschema.validate(dict(request.query), schema)
     except jsonschema.ValidationError as e:
-        return validated_json_response({"error": e.message}, status=400)
+        return validated_json_response({"error": e.message}, status=422)
 
     name = request.query.get("name")
 
@@ -105,7 +105,7 @@ async def staff_add_handler(request: Request):
     try:
         jsonschema.validate(dict(request.query), schema)
     except jsonschema.ValidationError as e:
-        return validated_json_response({"error": e.message}, status=400)
+        return validated_json_response({"error": e.message}, status=422)
 
     name = request.query.get("name")
     company = request.query.get("company")
@@ -158,7 +158,7 @@ async def products_add_handler(request: Request):
             },
             "employee_id": {
                 "type": "string",
-                "pattern": "^[0-9]+$"
+                "pattern": "^[1-9][0-9]*$"
             }
         },
 
@@ -169,7 +169,7 @@ async def products_add_handler(request: Request):
     try:
         jsonschema.validate(dict(request.query), schema)
     except jsonschema.ValidationError as e:
-        return validated_json_response({"error": e.message}, status=400)
+        return validated_json_response({"error": e.message}, status=422)
 
     name = request.query.get("name")
     employee_id = request.query.get("employee_id")
@@ -227,7 +227,7 @@ async def products_set_employee_handler(request: Request):
     try:
         jsonschema.validate(dict(request.query), schema)
     except jsonschema.ValidationError as e:
-        return validated_json_response({"error": e.message}, status=400)
+        return validated_json_response({"error": e.message}, status=422)
 
     name = request.query.get("name")
     employee_id = request.query.get("employee_id")
