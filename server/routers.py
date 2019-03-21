@@ -158,7 +158,7 @@ async def products_add_handler(request: Request):
             },
             "employee_id": {
                 "type": "string",
-                "pattern": "^[1-9][0-9]*$"
+                "pattern": "^[0-9]+$"
             }
         },
 

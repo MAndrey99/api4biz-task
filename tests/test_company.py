@@ -25,7 +25,8 @@ def test_company(loop):
             {"name": "A"},
             {"name": "A12"},
             {"name": "123456"},
-            {"name": "New", "id": 17}
+            {"name": "New", "id": 17},
+            {}
         ]
 
         tasks = []

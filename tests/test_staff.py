@@ -47,7 +47,10 @@ def test_staff(loop):
             ({"name": "Tim", "company": "Russia"}, 400),
             ({"name": "A12"}, 422),
             ({"name": "Tim"}, 422),
-            ({"name": "New", "id": 17}, 422)
+            ({"nam": "Tim", "company": "Apple"}, 422),
+            ({"company": "Apple"}, 422),
+            ({"name": "New", "id": 17}, 422),
+            ({}, 422)
         ]
 
         tasks = []
