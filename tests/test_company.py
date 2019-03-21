@@ -1,6 +1,3 @@
-import aiohttp
-import jsonschema
-
 from asyncio import gather
 from functools import partial
 from typing import Callable, Awaitable

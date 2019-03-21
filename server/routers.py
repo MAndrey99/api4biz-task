@@ -186,14 +186,14 @@ async def products_add_handler(request: Request):
                 # добавляем продукт
                 await conn.execute(f"INSERT INTO products (name, employee_id) VALUES ('{name}', {employee_id})")
             except asyncpg.UniqueViolationError:
-                return validated_json_response({"error": f"product '{name}' already exists"}, status=400)
+                return validated_json_response({"error": f"product '{name}' already exists. Use /products/set_employee "
+                                                         f"to set employee"}, status=400)
         else:
             # добавляем продукт без указания отвецственного сотрудника
-            async with db_pool.acquire() as conn:
-                try:
-                    await conn.execute(f"INSERT INTO products (name) VALUES ('{name}')")
-                except asyncpg.UniqueViolationError:
-                    return validated_json_response({"error": f"product '{name}' already exists"}, status=400)
+            try:
+                await conn.execute(f"INSERT INTO products (name) VALUES ('{name}')")
+            except asyncpg.UniqueViolationError:
+                return validated_json_response({"error": f"product '{name}' already exists"}, status=208)
     return validated_json_response({})
 
 
@@ -252,16 +252,27 @@ async def products_list_handler(request: Request):
     """
     Возвращает список продуктов
     """
+    def delete_none(d: dict):
+        to_del = []
+
+        for k, v in d.items():
+            if v is None:
+                to_del.append(k)
+
+        for i in to_del:
+            del d[i]
+
+        return d
 
     async with db_pool.acquire() as conn:
         products = await conn.fetch("SELECT * FROM products")
 
     return validated_json_response({
         "content": [
-            {
+            delete_none({
                 "name": i.get('name'),
                 "employee_id": i.get('employee_id')
-            } for i in products
+            }) for i in products
         ]
     })
 
