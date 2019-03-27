@@ -1,4 +1,3 @@
-import aiohttp
 from random import randint
 from asyncio import gather
 from time import perf_counter

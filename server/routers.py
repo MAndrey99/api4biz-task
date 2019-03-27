@@ -17,6 +17,7 @@ async def drop_all_handler(request: Request):
 
     async with db_pool.acquire() as conn:
         await conn.execute("DELETE FROM products")
+        await conn.execute("DELETE FROM CSLinks")
         await conn.execute("DELETE FROM staff")
         await conn.execute("DELETE FROM companies")
 
@@ -112,10 +113,72 @@ async def staff_add_handler(request: Request):
 
     try:
         async with db_pool.acquire() as conn:
-            await conn.execute(f"INSERT INTO staff (name, company_name) VALUES ('{name}', '{company}')")
+            async with conn.transaction():
+                # добавляем работника и получаем его id
+                emp_id = (await conn.fetch(f"INSERT INTO staff (name) VALUES ('{name}') RETURNING id"))[0].get('id')
+
+                # получаем id компании
+                comp_id = (await conn.fetch(f"SELECT id FROM companies WHERE name='{company}'"))
+                assert len(comp_id) == 1
+                comp_id = comp_id[0].get('id')
+
+                # добавляем связь работника с компанией
+                await conn.execute(f"INSERT INTO CSLinks (com_id, emp_id) VALUES ({comp_id}, {emp_id})")
         return validated_json_response({})
-    except asyncpg.ForeignKeyViolationError:
+    except AssertionError:
         return validated_json_response({"error": f"company '{company}' is not exists"}, status=400)
+
+
+@routers.get('/staff/add_to_company')
+async def add_to_company_handler(request: Request):
+    """
+    Добавляет работника к компании
+
+    Обязательные параметры:
+    - id       - id работника(он должен уже существовать)
+    - company  - название компании(она должна уже существовать)
+    """
+
+    schema = {
+        "type": "object",
+
+        "properties": {
+            "id": {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+            },
+            "company": {
+                "type": "string",
+                "pattern": "^[A-Za-z]{2,}$"
+            }
+        },
+
+        "additionalProperties": False,
+        "minProperties": 2
+    }
+
+    try:
+        jsonschema.validate(dict(request.query), schema)
+    except jsonschema.ValidationError as e:
+        return validated_json_response({"error": e.message}, status=422)
+
+    emp_id = int(request.query.get("id"))
+    company = request.query.get("company")
+
+    try:
+        async with db_pool.acquire() as conn:
+            # получаем id компании
+            comp_id = (await conn.fetch(f"SELECT id FROM companies WHERE name='{company}'"))
+            assert len(comp_id) == 1
+            comp_id = comp_id[0].get('id')
+
+            # добавляем связь работника с компанией
+            await conn.execute(f"INSERT INTO CSLinks (com_id, emp_id) VALUES ({comp_id}, {emp_id})")
+        return validated_json_response({})
+    except AssertionError:
+        return validated_json_response({"error": f"company '{company}' is not exists"}, status=400)
+    except asyncpg.ForeignKeyViolationError:
+        return validated_json_response({"error": f"employee with id '{emp_id}' is not exists"}, status=400)
 
 
 @routers.get('/staff/list')
@@ -124,17 +187,21 @@ async def staff_list_handler(request: Request):
     Возвращает список персонала
     """
     async with db_pool.acquire() as conn:
+        # получаем список всего персонала
         staff = await conn.fetch("SELECT * FROM staff")
 
-    return validated_json_response({
-        "content": [
-            {
-                "id": i.get('id'),
-                "name": i.get('name'),
-                "company": i.get('company_name')
-            } for i in staff
-        ]
-    })
+        return validated_json_response({
+            "content": [
+                {
+                    "id": i.get('id'),
+                    "name": i.get('name'),
+                    "companies": [c.get('name') for c in (await conn.fetch(
+                        f"SELECT name FROM companies "
+                        f"JOIN CSLinks ON emp_id={i.get('id')} AND CSLinks.com_id=companies.id"
+                    ))]
+                } for i in staff
+            ]
+        })
 
 
 @routers.get('/products/add')

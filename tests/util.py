@@ -42,9 +42,9 @@ async def delete_all(session: aiohttp.ClientSession):
 
 async def check(session: aiohttp.ClientSession, src: str, params: dict, expect_status: int, expect_json_schema: dict) -> dict:
     async with session.get(f'http://0.0.0.0:8080/{src}', params=params) as resp:
-        assert resp.status == expect_status
-
         json: dict = await resp.json()
+
+        assert resp.status == expect_status
         jsonschema.validate(json, expect_json_schema)
 
     return json

@@ -1,6 +1,5 @@
 from asyncio import gather
 from functools import partial
-from typing import Callable, Awaitable
 
 from .util import *
 
@@ -14,16 +13,15 @@ def test_staff(loop):
                 "type": "string",
                 "pattern": "^[A-Z][a-z]+$"
             },
-            "company": {
-                "type": "string",
-                "pattern": "^[A-Za-z]{2,}$"
+            "companies": {
+                "type": "array"
             },
             "id": {
                 "type": "integer"
             }
         },
 
-        "required": ["name", "company", "id"],
+        "required": ["name", "companies", "id"],
         "additionalProperties": False
     }
 
@@ -53,9 +51,9 @@ def test_staff(loop):
         tasks = []
 
         async with aiohttp.ClientSession() as session:
-            check_add:  Callable[[dict, int, dict], Awaitable[dict]] = partial(check, session, "staff/add")
-            check_list: Callable[[dict, int, dict], Awaitable[dict]] = partial(check, session, "staff/list", {}, 200,
-                                                                               content_schema)
+            check_addtoc = partial(check, session, "staff/add_to_company")
+            check_add = partial(check, session, "staff/add")
+            check_list = partial(check, session, "staff/list", {}, 200, content_schema)
 
             for p, c in err_params_and_code:
                 tasks.append(loop.create_task(check_add(p, c, error_schema)))
@@ -68,11 +66,31 @@ def test_staff(loop):
             await check_add({"name": "Sundar", "company": "Google"}, 200, empty_schema)
             await check_add({"name": "Oleg", "company": "JetBrains"}, 200, empty_schema)
 
-            staff = []
+            staff = set()
+            oleg_id = None
             for i in (await check_list())["content"]:
                 jsonschema.validate(i, person_schema)
-                staff.append((i["name"], i["company"]))
-            assert staff == [("Tim", "Apple"), ("Tim", "Apple"), ("Sundar", "Google"), ("Oleg", "JetBrains")]
+                staff.add((i["name"], frozenset(i["companies"])))
+
+                if i["name"] == "Oleg":
+                    assert not oleg_id
+                    oleg_id = i["id"]
+
+            assert staff == {("Tim", frozenset(("Apple", ))), ("Tim", frozenset(("Apple", ))),
+                             ("Sundar", frozenset(("Google", ))), ("Oleg", frozenset(("JetBrains", )))}
+            staff = set()
+
+            await check_addtoc({"id": oleg_id, "company": "Google"}, 200, empty_schema)
+            await check_addtoc({"id": oleg_id, "company": "Gogle"},  400, error_schema)
+            await check_addtoc({"id": 1000,    "company": "Google"}, 400, error_schema)
+            del oleg_id
+
+            for i in (await check_list())["content"]:
+                jsonschema.validate(i, person_schema)
+                staff.add((i["name"], frozenset(i["companies"])))
+
+            assert staff == {("Tim", frozenset(("Apple",))), ("Tim", frozenset(("Apple",))),
+                             ("Sundar", frozenset(("Google",))), ("Oleg", frozenset(("JetBrains", "Google",)))}
 
     loop.run_until_complete(setup())
     loop.run_until_complete(_test())
