@@ -119,13 +119,16 @@ async def staff_add_handler(request: Request):
 
                 # получаем id компании
                 comp_id = (await conn.fetch(f"SELECT id FROM companies WHERE name='{company}'"))
-                assert len(comp_id) == 1
+                if len(comp_id) != 1:
+                    assert len(comp_id) == 0
+                    raise ValueError
+
                 comp_id = comp_id[0].get('id')
 
                 # добавляем связь работника с компанией
                 await conn.execute(f"INSERT INTO CSLinks (com_id, emp_id) VALUES ({comp_id}, {emp_id})")
         return validated_json_response({})
-    except AssertionError:
+    except ValueError:
         return validated_json_response({"error": f"company '{company}' is not exists"}, status=400)
 
 
@@ -169,13 +172,16 @@ async def add_to_company_handler(request: Request):
         async with db_pool.acquire() as conn:
             # получаем id компании
             comp_id = (await conn.fetch(f"SELECT id FROM companies WHERE name='{company}'"))
-            assert len(comp_id) == 1
+            if len(comp_id) != 1:
+                assert len(comp_id) == 0
+                raise ValueError
+
             comp_id = comp_id[0].get('id')
 
             # добавляем связь работника с компанией
             await conn.execute(f"INSERT INTO CSLinks (com_id, emp_id) VALUES ({comp_id}, {emp_id})")
         return validated_json_response({})
-    except AssertionError:
+    except ValueError:
         return validated_json_response({"error": f"company '{company}' is not exists"}, status=400)
     except asyncpg.ForeignKeyViolationError:
         return validated_json_response({"error": f"employee with id '{emp_id}' is not exists"}, status=400)

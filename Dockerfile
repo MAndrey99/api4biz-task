@@ -9,4 +9,4 @@ COPY ./static ./static
 
 RUN pip install --no-cache-dir -r container_requirements.txt
 
-CMD ["python", "main.py"]
+CMD ["python", "-OO", "main.py"]
