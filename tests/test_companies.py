@@ -31,8 +31,8 @@ def test_company(loop):
         async with aiohttp.ClientSession() as session:
             await delete_all(session)
 
-            check_add:  Callable[[dict, int, dict], Awaitable[dict]] = partial(check, session, "company/add")
-            check_list: Callable[[dict, int, dict], Awaitable[dict]] = partial(check, session, "company/list", {}, 200,
+            check_add:  Callable[[dict, int, dict], Awaitable[dict]] = partial(check, session.post, "companies")
+            check_list: Callable[[dict, int, dict], Awaitable[dict]] = partial(check, session.get, "companies", {}, 200,
                                                                                content_schema)
 
             for p in err_params:

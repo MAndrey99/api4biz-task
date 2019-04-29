@@ -38,20 +38,21 @@ def test_products(loop):
 
         async with aiohttp.ClientSession() as session:
             await delete_all(session)  # очистка таблиц
-            get = partial(check, session)
+            get = partial(check, session.get)
+            post = partial(check, session.post)
 
             # добавляем компании
-            await get("company/add", {"name": "Google"},    200, empty_schema)
-            await get("company/add", {"name": "Apple"},     200, empty_schema)
-            await get("company/add", {"name": "JetBrains"}, 200, empty_schema)
+            await post("companies", {"name": "Google"},    200, empty_schema)
+            await post("companies", {"name": "Apple"},     200, empty_schema)
+            await post("companies", {"name": "JetBrains"}, 200, empty_schema)
 
             # добавляем людей
-            await get("staff/add", {"name": "Sundar", "company": "Google"},    200, empty_schema)
-            await get("staff/add", {"name": "Tim",    "company": "Apple"},     200, empty_schema)
-            await get("staff/add", {"name": "Oleg",   "company": "JetBrains"}, 200, empty_schema)
+            await post("staff", {"name": "Sundar", "company": "Google"},    200, empty_schema)
+            await post("staff", {"name": "Tim",    "company": "Apple"},     200, empty_schema)
+            await post("staff", {"name": "Oleg",   "company": "JetBrains"}, 200, empty_schema)
             
             # получаем id добавленных людей
-            for i in (await get("staff/list", {}, 200, content_schema))["content"]:
+            for i in (await get("staff", {}, 200, content_schema))["content"]:
                 available_staff_ids.add(i["id"])
             assert len(available_staff_ids) == 3
 
@@ -67,9 +68,9 @@ def test_products(loop):
         tasks = []
 
         async with aiohttp.ClientSession() as session:
-            check_add: Callable[[dict, int, dict], Awaitable[dict]] = partial(check, session, "products/add")
-            check_set: Callable[[dict, int, dict], Awaitable[dict]] = partial(check, session, "products/set_employee")
-            check_list: Callable[[dict, int, dict], Awaitable[dict]] = partial(check, session, "products/list", {}, 200,
+            check_add: Callable[[dict, int, dict], Awaitable[dict]] = partial(check, session.post, "products")
+            check_set: Callable[[dict, int, dict], Awaitable[dict]] = partial(check, session.put, "products")
+            check_list: Callable[[dict, int, dict], Awaitable[dict]] = partial(check, session.get, "products", {}, 200,
                                                                                content_schema)
 
             for p, c in err_params_and_code:

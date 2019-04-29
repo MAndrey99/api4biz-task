@@ -32,9 +32,9 @@ def test_staff(loop):
 
         async with aiohttp.ClientSession() as session:
             await delete_all(session)
-            await check(session, "company/add", {"name": "Google"},    200, empty_schema)
-            await check(session, "company/add", {"name": "Apple"},     200, empty_schema)
-            await check(session, "company/add", {"name": "JetBrains"}, 200, empty_schema)
+            await check(session.post, "companies", {"name": "Google"},    200, empty_schema)
+            await check(session.post, "companies", {"name": "Apple"},     200, empty_schema)
+            await check(session.post, "companies", {"name": "JetBrains"}, 200, empty_schema)
 
     async def _test():
         err_params_and_code = [
@@ -51,9 +51,9 @@ def test_staff(loop):
         tasks = []
 
         async with aiohttp.ClientSession() as session:
-            check_addtoc = partial(check, session, "staff/add_to_company")
-            check_add = partial(check, session, "staff/add")
-            check_list = partial(check, session, "staff/list", {}, 200, content_schema)
+            check_addtoc = partial(check, session.put, "staff")
+            check_add = partial(check, session.post, "staff")
+            check_list = partial(check, session.get, "staff", {}, 200, content_schema)
 
             for p, c in err_params_and_code:
                 tasks.append(loop.create_task(check_add(p, c, error_schema)))

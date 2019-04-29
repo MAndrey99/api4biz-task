@@ -1,4 +1,4 @@
-from aiohttp.web import RouteTableDef, Request, FileResponse
+from aiohttp.web import RouteTableDef, Request
 import jsonschema
 import logging
 
@@ -9,7 +9,7 @@ db_pool: asyncpg.pool.Pool
 routers = RouteTableDef()
 
 
-@routers.get('/delete_all')
+@routers.delete('/')
 async def drop_all_handler(request: Request):
     """
     Удаляет все данные
@@ -24,7 +24,7 @@ async def drop_all_handler(request: Request):
     return validated_json_response({})
 
 
-@routers.get('/company/add')
+@routers.post('/companies')
 async def company_add_handler(request: Request):
     """
     Добавляет компанию
@@ -62,7 +62,7 @@ async def company_add_handler(request: Request):
         return validated_json_response({"error": "company already created"}, status=208)
 
 
-@routers.get('/company/list')
+@routers.get('/companies')
 async def company_list_handler(request: Request):
     """
     Возвращает список всех компаний
@@ -75,7 +75,7 @@ async def company_list_handler(request: Request):
     })
 
 
-@routers.get('/staff/add')
+@routers.post('/staff')
 async def staff_add_handler(request: Request):
     """
     Добавляет работника
@@ -132,7 +132,7 @@ async def staff_add_handler(request: Request):
         return validated_json_response({"error": f"company '{company}' is not exists"}, status=400)
 
 
-@routers.get('/staff/add_to_company')
+@routers.put('/staff')
 async def add_to_company_handler(request: Request):
     """
     Добавляет работника к компании
@@ -187,7 +187,7 @@ async def add_to_company_handler(request: Request):
         return validated_json_response({"error": f"employee with id '{emp_id}' is not exists"}, status=400)
 
 
-@routers.get('/staff/list')
+@routers.get('/staff')
 async def staff_list_handler(request: Request):
     """
     Возвращает список персонала
@@ -210,7 +210,7 @@ async def staff_list_handler(request: Request):
         })
 
 
-@routers.get('/products/add')
+@routers.post('/products')
 async def products_add_handler(request: Request):
     """
     Добавляет продукт
@@ -270,7 +270,7 @@ async def products_add_handler(request: Request):
     return validated_json_response({})
 
 
-@routers.get('/products/set_employee')
+@routers.put('/products')
 async def products_set_employee_handler(request: Request):
     """
     Назначает продукту отвецственного сотрудника
@@ -320,7 +320,7 @@ async def products_set_employee_handler(request: Request):
     return validated_json_response({})
 
 
-@routers.get('/products/list')
+@routers.get('/products')
 async def products_list_handler(request: Request):
     """
     Возвращает список продуктов
@@ -348,14 +348,6 @@ async def products_list_handler(request: Request):
             }) for i in products
         ]
     })
-
-
-@routers.get('/')
-async def index_handler(request: Request):
-    """
-    Возвращает информацию о всех методах api
-    """
-    return FileResponse("./static/index.html")
 
 
 async def init(app):

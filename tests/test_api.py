@@ -16,9 +16,9 @@ def test_many_requests(loop):
             tasks = []
 
             for _ in range(1000):
-                tasks.append(loop.create_task(check(session, "company/add", {'name': next(ng)}, 200, empty_schema)))
+                tasks.append(loop.create_task(check(session.post, "companies", {'name': next(ng)}, 200, empty_schema)))
                 if randint(0, 10) == 1:
-                    tasks.append(loop.create_task(check(session, "company/list", {}, 200, content_schema)))
+                    tasks.append(loop.create_task(check(session.get, "companies", {}, 200, content_schema)))
 
             begin = perf_counter()
             await gather(*tasks)
